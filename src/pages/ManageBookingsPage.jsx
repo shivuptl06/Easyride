@@ -1,9 +1,10 @@
 /* eslint-disable no-unused-vars */
 import React, { useEffect, useState } from 'react';
 import { getAuth } from "firebase/auth";
-import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, getDoc } from "firebase/firestore";
+import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, deleteDoc, getDoc } from "firebase/firestore";
 import { app } from "../firebaseConfig";
 import Navbar from '../components/Navbar';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -12,6 +13,8 @@ const ManageBookingsPage = () => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -51,11 +54,18 @@ const ManageBookingsPage = () => {
     }
   };
 
-  const handleRejectBooking = async (bookingId) => {
+  const handleRejectBooking = (bookingId) => {
+    setSelectedBookingId(bookingId);
+    setIsModalOpen(true);
+  };
+
+  const confirmRejectBooking = async () => {
     try {
-      const bookingRef = doc(db, "bookings", bookingId);
-      await updateDoc(bookingRef, { status: "Rejected" });
-      alert("Booking rejected!");
+      const bookingRef = doc(db, "bookings", selectedBookingId);
+      await deleteDoc(bookingRef);
+      setBookings(bookings.filter(booking => booking.id !== selectedBookingId));
+      setIsModalOpen(false);
+      alert("Booking rejected and deleted!");
     } catch (error) {
       console.error("Error rejecting booking:", error);
     }
@@ -100,6 +110,12 @@ const ManageBookingsPage = () => {
           </div>
         </div>
       </main>
+      <ConfirmationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConfirm={confirmRejectBooking}
+        message="Are you sure you want to reject and delete this booking?"
+      />
     </div>
   );
 };

@@ -2,10 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth } from "firebase/auth";
-import { getFirestore, doc, getDoc, collection, addDoc, query, where, getDocs, updateDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, collection, addDoc, query, where, getDocs, updateDoc, deleteDoc } from "firebase/firestore";
 import { app } from "../firebaseConfig";
 import Navbar from '../components/Navbar';
 import Modal from '../components/Modal';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -18,6 +19,9 @@ const DriverDashboard = () => {
   const [bookings, setBookings] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
+  const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
+  const [confirmationAction, setConfirmationAction] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -72,25 +76,37 @@ const DriverDashboard = () => {
     }
   };
 
-  const handleAcceptBooking = async (bookingId) => {
-    try {
-      const bookingRef = doc(db, "bookings", bookingId);
-      await updateDoc(bookingRef, { status: "Accepted" });
-      alert("Booking accepted!");
-      fetchBookings(); // Refresh bookings after accepting
-    } catch (error) {
-      console.error("Error accepting booking:", error);
-    }
+  const handleAcceptBooking = (bookingId) => {
+    setSelectedBookingId(bookingId);
+    setConfirmationAction('accept');
+    setIsConfirmationModalOpen(true);
   };
 
-  const handleRejectBooking = async (bookingId) => {
-    try {
-      const bookingRef = doc(db, "bookings", bookingId);
-      await updateDoc(bookingRef, { status: "Rejected" });
-      alert("Booking rejected!");
-      fetchBookings(); // Refresh bookings after rejecting
-    } catch (error) {
-      console.error("Error rejecting booking:", error);
+  const handleRejectBooking = (bookingId) => {
+    setSelectedBookingId(bookingId);
+    setConfirmationAction('reject');
+    setIsConfirmationModalOpen(true);
+  };
+
+  const confirmAction = async () => {
+    if (confirmationAction === 'accept') {
+      try {
+        const bookingRef = doc(db, "bookings", selectedBookingId);
+        await updateDoc(bookingRef, { status: "Accepted" });
+        setBookings(bookings.map(booking => booking.id === selectedBookingId ? { ...booking, status: "Accepted" } : booking));
+        setIsConfirmationModalOpen(false);
+      } catch (error) {
+        console.error("Error accepting booking:", error);
+      }
+    } else if (confirmationAction === 'reject') {
+      try {
+        const bookingRef = doc(db, "bookings", selectedBookingId);
+        await deleteDoc(bookingRef);
+        setBookings(bookings.filter(booking => booking.id !== selectedBookingId));
+        setIsConfirmationModalOpen(false);
+      } catch (error) {
+        console.error("Error rejecting booking:", error);
+      }
     }
   };
 
@@ -185,18 +201,22 @@ const DriverDashboard = () => {
                       <p><strong>Passenger:</strong> {booking.passengerEmail}</p>
                       <p><strong>Ride:</strong> {booking.rideId}</p>
                       <p><strong>Status:</strong> {booking.status}</p>
-                      <button
-                        onClick={() => handleAcceptBooking(booking.id)}
-                        className="px-4 py-2 mt-2 mr-2 text-white bg-green-500 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => handleRejectBooking(booking.id)}
-                        className="px-4 py-2 mt-2 text-white bg-red-500 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
-                      >
-                        Reject
-                      </button>
+                      {booking.status === "Pending" && (
+                        <>
+                          <button
+                            onClick={() => handleAcceptBooking(booking.id)}
+                            className="px-4 py-2 mt-2 mr-2 text-white bg-green-500 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => handleRejectBooking(booking.id)}
+                            className="px-4 py-2 mt-2 text-white bg-red-500 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
                     </div>
                   ))
                 ) : (
@@ -211,6 +231,12 @@ const DriverDashboard = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         message={modalMessage}
+      />
+      <ConfirmationModal
+        isOpen={isConfirmationModalOpen}
+        onClose={() => setIsConfirmationModalOpen(false)}
+        onConfirm={confirmAction}
+        message={`Are you sure you want to ${confirmationAction} this booking?`}
       />
     </div>
   );
